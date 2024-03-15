@@ -1,0 +1,10 @@
+//have gate with both input and the output signal as internal signal
+
+PRIMARY_INPUTS A B C
+PRIMARY_OUTPUTS H
+INTERNAL_SIGNALS D E F G 
+AND2 D G H
+OR2 B F G
+AND2 A C E
+INV E F
+INV A D

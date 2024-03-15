@@ -1,0 +1,11 @@
+//gate in which internal signal is input to different gates
+
+PRIMARY_INPUTS A B C
+PRIMARY_OUTPUTS I
+INTERNAL_SIGNALS D E F G H
+NOR2 F F H
+OR2 D E F
+INV C E
+NAND2 G H I
+AND2 A B D
+NAND2 D F G

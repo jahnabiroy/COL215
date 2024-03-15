@@ -1,0 +1,4 @@
+//just single gate
+PRIMARY_INPUTS A    
+PRIMARY_OUTPUTS B  
+INV A B

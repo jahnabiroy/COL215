@@ -1,0 +1,6 @@
+//gate delays for testcase2.0
+NOR2 5.90
+AND2 1.43
+OR2 12
+AND2 3.87
+INV 8.65

@@ -1,0 +1,9 @@
+//gates in which  inputs from different gates reach a node
+
+PRIMARY_INPUTS A
+PRIMARY_OUTPUTS B
+INTERNAL_SIGNALS C D
+AND2 A A C
+INV C B
+INV D B
+NAND2 A A D

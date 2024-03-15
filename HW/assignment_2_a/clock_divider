@@ -1,0 +1,62 @@
+----------------------------------------------------------------------------------
+-- Company:
+-- Engineer:
+-- 
+-- Create Date: 09/30/2023 01:01:12 AM
+-- Design Name:
+-- Module Name: clock_divider - Behavioral
+-- Project Name:
+-- Target Devices:
+-- Tool Versions:
+-- Description:
+-- 
+-- Dependencies:
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity clock_divider is
+    Port (
+        clk : in std_logic;
+        clk_out : out STD_LOGIC
+    );
+end clock_divider;
+
+architecture Behavioral of clock_divider is
+    signal counter : integer range 0 to 3 := 0;
+    signal clk_div  : STD_LOGIC := '0';
+--    signal clk : std_logic := '0';
+--    constant clock_period : time := 10ns;
+    
+begin
+--clock_process :process
+--begin
+--clk <= '0';
+--wait for clock_period/2;
+--clk <= '1';
+--wait for clock_period/2;
+--end process;
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if counter = 1 then
+                counter <= 0;
+                clk_div <= NOT clk_div;
+            else
+                counter <= counter + 1;
+            end if;
+        end if;
+    end process;
+
+    clk_out <= clk_div;
+
+end Behavioral;

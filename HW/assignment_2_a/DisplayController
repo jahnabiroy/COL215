@@ -1,0 +1,277 @@
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
+
+ENTITY DisplayController IS
+    PORT (
+        clk : IN STD_LOGIC;
+        RST : IN STD_LOGIC;
+        hsync : OUT STD_LOGIC;
+        vsync : OUT STD_LOGIC;
+        r : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+        g : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+        b : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+    );
+END DisplayController;
+
+ARCHITECTURE Behavioral OF DisplayController IS
+    COMPONENT   clock_divider
+        PORT (
+            clk : IN STD_LOGIC;
+            clk_out : OUT STD_LOGIC);
+    END COMPONENT;
+    
+    COMPONENT dist_mem_gen_0
+        PORT (
+            a : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+            spo : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
+            clk : IN STD_LOGIC);
+    END COMPONENT;
+
+    COMPONENT dist_mem_gen_1
+        PORT (
+            a : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+            d : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
+            clk : IN STD_LOGIC;
+            we : IN STD_LOGIC;
+            spo : OUT STD_LOGIC_VECTOR(7 DOWNTO 0));
+    END COMPONENT;
+
+    SIGNAL CLK_CHECKER : INTEGER RANGE 0 TO 1 := 0;
+    SIGNAL CLK4 : STD_LOGIC := '0';
+    SIGNAL HCORDINATE : INTEGER := 0;
+    SIGNAL VCORDINATE : INTEGER := 0;
+    SIGNAL VIDEO_ON : STD_LOGIC := '0';
+    CONSTANT HZ_ACTV : INTEGER := 639;
+    CONSTANT HZ_FRNT : INTEGER := 16;
+    CONSTANT H_SYNC : INTEGER := 96;
+    CONSTANT HZ_BACK : INTEGER := 48;
+    CONSTANT VR_ACTV : INTEGER := 479;
+    CONSTANT VR_FRNT : INTEGER := 10;
+    CONSTANT V_SYNC : INTEGER := 2;
+    CONSTANT VR_BACK : INTEGER := 33;
+    SIGNAL ROMADDRESS : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL ROMOUTPUT : STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL RAMADDRESS : STD_LOGIC_VECTOR(15 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL RAMINPUT : STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+    SIGNAL WRITE_ENABLE : STD_LOGIC := '1';
+    SIGNAL RAMOUTPUT : STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+    SHARED VARIABLE i : INTEGER := 0;
+    SHARED VARIABLE j : INTEGER := - 1;
+    SHARED VARIABLE PIXEL_COUNT : INTEGER := - 1;
+    SIGNAL DISPLAY_ADD : INTEGER := 0;
+
+BEGIN
+
+    rom : dist_mem_gen_0 PORT MAP(
+        a => ROMADDRESS,
+        clk => clk,
+        spo => ROMOUTPUT);
+
+    ram : dist_mem_gen_1 PORT MAP(
+        a => RAMADDRESS,
+        d => RAMINPUT,
+        clk => clk,
+        we => WRITE_ENABLE,
+        spo => RAMOUTPUT);
+    clkdiv : clock_divider PORT MAP(
+        clk => clk,
+        clk_out => CLK4);
+
+    RAM_ADDRESS_ASSIGN : PROCESS (clk)
+    BEGIN
+
+        IF (rising_edge(clk)) THEN
+            IF (PIXEL_COUNT < 65536) THEN
+                RAMADDRESS <= STD_LOGIC_VECTOR(TO_UNSIGNED(256 * i + j, 16));
+                WRITE_ENABLE <= '1';
+            ELSE
+                RAMADDRESS <= STD_LOGIC_VECTOR(TO_UNSIGNED(DISPLAY_ADD, 16));
+                WRITE_ENABLE <= '0';
+            END IF;
+        END IF;
+
+    END PROCESS;
+
+    IMAGE_PROCESSOR : PROCESS (clk)
+        VARIABLE P1, P2, P3 : INTEGER := 0;
+        VARIABLE GRADIENT : INTEGER;
+        VARIABLE OUTPIXEL : STD_LOGIC_VECTOR(7 DOWNTO 0);
+        VARIABLE CHECKER : INTEGER := 0;
+    BEGIN
+        IF PIXEL_COUNT < 65536 THEN
+            IF rising_edge(clk) THEN
+                IF CHECKER = 0 THEN
+                    IF j = 255 THEN
+                        i := i + 1;
+                        j := 0;
+                    ELSE
+                        j := j + 1;
+                    END IF;
+                    PIXEL_COUNT := PIXEL_COUNT + 1;--COUNT THE NUMBER OF PIXELS THAT HAVE BEEN READ
+                    CHECKER := 1;
+                ELSIF CHECKER = 1 THEN
+                    IF j = 0 THEN
+                        ROMADDRESS <= STD_LOGIC_VECTOR(to_unsigned(256 * i + j, 16));
+                    END IF;
+                    CHECKER := 2;
+                ELSIF CHECKER = 2 THEN
+                    IF j = 0 THEN
+                        P1 := 0;
+                    ELSE
+                        P1 := P2;
+                    END IF;
+                    CHECKER := 3;
+                ELSIF CHECKER = 3 THEN
+                    IF j = 0 THEN
+                        P2 := to_integer(unsigned(ROMOUTPUT));
+                    ELSE
+                        P2 := P3;
+                    END IF;
+                    CHECKER := 4;
+                ELSIF CHECKER=4 THEN
+
+                    CHECKER:=5;
+                ELSIF CHECKER = 5 THEN
+                    ROMADDRESS <= STD_LOGIC_VECTOR(to_unsigned(256 * i + j + 1, 16));
+                    CHECKER := 6;
+                ELSIF CHECKER = 6 THEN
+                    IF j = 255 THEN
+                        P3 := 0;
+                    ELSE
+                        P3 := to_integer(unsigned(ROMOUTPUT));
+                    END IF;
+                    CHECKER := 7;
+                ELSIF CHECKER=7 THEN
+                    CHECKER:=8;
+                ELSIF CHECKER = 8 THEN
+                    GRADIENT := P3 + P1 - 2 * P2;
+                    IF GRADIENT > 255 THEN
+                        GRADIENT := 255;
+                    ELSIF GRADIENT < 0 THEN
+                        GRADIENT := 0;
+                    END IF;
+                    CHECKER := 9;
+                ELSIF CHECKER = 9 THEN
+                    OUTPIXEL := STD_LOGIC_VECTOR(to_unsigned(GRADIENT, 8));
+                    CHECKER := 10;
+                ELSIF CHECKER = 10 THEN
+                    RAMINPUT <= OUTPIXEL;
+                    CHECKER := 0;
+                END IF;
+            END IF;
+        END IF;
+    END PROCESS;
+
+    HZ_COUNTING : PROCESS (CLK4, WRITE_ENABLE)
+    BEGIN
+        IF (WRITE_ENABLE = '1') THEN
+            HCORDINATE <= 0;
+        ELSIF (CLK4'event AND CLK4 = '1') THEN
+            IF (HCORDINATE = HZ_ACTV + HZ_FRNT + H_SYNC + HZ_BACK) THEN
+                HCORDINATE <= 0;
+            ELSE
+                HCORDINATE <= HCORDINATE + 1;
+            END IF;
+        END IF;
+    END PROCESS;
+
+    VR_COUNTING : PROCESS (CLK4, WRITE_ENABLE, HCORDINATE)
+    BEGIN
+        IF (WRITE_ENABLE = '1') THEN
+            VCORDINATE <= 0;
+        ELSIF (CLK4'event AND CLK4 = '1') THEN
+            IF (HCORDINATE = HZ_ACTV + HZ_FRNT + H_SYNC + HZ_BACK) THEN
+                IF (VCORDINATE = VR_ACTV + VR_FRNT + V_SYNC + VR_BACK) THEN
+                    VCORDINATE <= 0;
+                ELSE
+                    VCORDINATE <= VCORDINATE + 1;
+                END IF;
+            END IF;
+        END IF;
+    END PROCESS;
+
+    H_SYNCHRONISATION : PROCESS (CLK4, WRITE_ENABLE, HCORDINATE)
+    BEGIN
+        IF (WRITE_ENABLE = '1') THEN
+            HSYNC <= '0';
+        ELSIF (CLK4'event AND CLK4 = '1') THEN
+            IF (HCORDINATE <= (HZ_ACTV + HZ_FRNT) OR HCORDINATE > (HZ_ACTV + HZ_FRNT + H_SYNC)) THEN
+                HSYNC <= '1';
+            ELSE
+                HSYNC <= '0';
+            END IF;
+        END IF;
+    END PROCESS;
+
+    V_SYNCHRONISATION : PROCESS (CLK4, WRITE_ENABLE, VCORDINATE)
+    BEGIN
+        IF (WRITE_ENABLE = '1') THEN
+            VSYNC <= '0';
+        ELSIF (CLK4'event AND CLK4 = '1') THEN
+            IF (VCORDINATE <= (VR_ACTV + VR_FRNT) OR VCORDINATE > (VR_ACTV + VR_FRNT + V_SYNC)) THEN
+                VSYNC <= '1';
+            ELSE
+                VSYNC <= '0';
+            END IF;
+        END IF;
+    END PROCESS;
+
+    POINTER : PROCESS (CLK4, WRITE_ENABLE, HCORDINATE, VCORDINATE)
+    BEGIN
+        IF (WRITE_ENABLE = '1') THEN
+            VIDEO_ON <= '0';
+        ELSIF (CLK4'event AND CLK4 = '1') THEN
+            IF (HCORDINATE <= HZ_ACTV AND VCORDINATE <= VR_ACTV) THEN
+                VIDEO_ON <= '1';
+            ELSE
+                VIDEO_ON <= '0';
+            END IF;
+        END IF;
+    END PROCESS;
+
+    DISPLAY_WRITE : PROCESS (CLK4, WRITE_ENABLE, HCORDINATE, VCORDINATE, VIDEO_ON)
+
+    BEGIN
+        IF (PIXEL_COUNT = 65536) THEN
+            IF (WRITE_ENABLE = '1') THEN
+                R <= "0000";
+                G <= "0000";
+                B <= "0000";
+
+            ELSIF (CLK4'event AND CLK4 = '1') THEN
+                IF (VIDEO_ON = '1') THEN
+
+                    IF ((HCORDINATE >= 10 AND HCORDINATE <= 265) AND (VCORDINATE >= 10 AND VCORDINATE <= 265)) THEN
+                        R(3) <= RAMOUTPUT(7);
+                        G(3) <= RAMOUTPUT(7);
+                        B(3) <= RAMOUTPUT(7);
+                        R(2) <= RAMOUTPUT(6);
+                        G(2) <= RAMOUTPUT(6);
+                        B(2) <= RAMOUTPUT(6);
+                        R(1) <= RAMOUTPUT(5);
+                        G(1) <= RAMOUTPUT(5);
+                        B(1) <= RAMOUTPUT(5);
+                        R(0) <= RAMOUTPUT(4);
+                        G(0) <= RAMOUTPUT(4);
+                        B(0) <= RAMOUTPUT(4);
+                        IF (HCORDINATE = 265 AND VCORDINATE = 265) THEN
+                            DISPLAY_ADD <= 0;
+                        ELSE
+                            DISPLAY_ADD <= DISPLAY_ADD + 1;
+                        END IF;
+
+                    ELSE
+                        R <= "0000";
+                        G <= "0000";
+                        B <= "0000";
+                    END IF;
+                ELSE
+                    R <= "0000";
+                    G <= "0000";
+                    B <= "0000";
+                END IF;
+            END IF;
+        END IF;
+    END PROCESS;
+END Behavioral;
